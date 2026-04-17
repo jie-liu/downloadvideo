@@ -30,11 +30,26 @@ async function pingServer() {
   }
 }
 
-async function getVideoInfo(url) {
+async function getPageHtml(tabId) {
+  try {
+    const results = await chrome.scripting.executeScript({
+      target: { tabId },
+      func: () => document.documentElement.outerHTML,
+    });
+    return results?.[0]?.result || null;
+  } catch {
+    return null;
+  }
+}
+
+async function getVideoInfo(url, tabId) {
+  const html = await getPageHtml(tabId);
+  const body = { url };
+  if (html) body.html = html;
   const resp = await fetch(`${SERVER}/api/info`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ url }),
+    body: JSON.stringify(body),
   });
   if (!resp.ok) {
     const err = await resp.json().catch(() => ({ error: "未知错误" }));
@@ -160,7 +175,7 @@ async function main() {
 
   try {
     showInfo(`正在解析: ${new URL(url).hostname}`);
-    const { title, formats } = await getVideoInfo(url);
+    const { title, formats } = await getVideoInfo(url, tab.id);
     hide("status-bar");
     renderFormats(title, formats);
   } catch (err) {

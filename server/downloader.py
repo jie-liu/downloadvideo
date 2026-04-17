@@ -103,17 +103,21 @@ def _get_yfsp_info(url: str) -> dict:
     return {"title": title, "formats": formats}
 
 
-def _get_generic_page_info(url: str) -> dict:
-    """通用页面提取器：当 yt-dlp 不支持时，扫描页面源码找 m3u8/mp4 链接"""
+def _get_generic_page_info(url: str, html: str = None) -> dict:
+    """通用页面提取器：当 yt-dlp 不支持时，扫描页面源码找 m3u8/mp4 链接。
+    html 由扩展直接传入时（Cloudflare 保护页面），跳过 HTTP 抓取。"""
     import re
 
-    resp = requests.get(
-        url,
-        headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
-        timeout=15,
-    )
-    resp.raise_for_status()
-    content = resp.text
+    if html:
+        content = html
+    else:
+        resp = requests.get(
+            url,
+            headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
+            timeout=15,
+        )
+        resp.raise_for_status()
+        content = resp.text
 
     # 提取标题
     title_match = re.search(r'<title[^>]*>([^<]+)</title>', content, re.IGNORECASE)
@@ -192,7 +196,7 @@ def _human_size(size_bytes) -> str:
     return f"{size_bytes} B"
 
 
-def get_info(url: str) -> dict:
+def get_info(url: str, html: str = None) -> dict:
     # yfsp.tv 使用自定义提取器
     if _is_yfsp_url(url):
         return _get_yfsp_info(url)
@@ -208,7 +212,7 @@ def get_info(url: str) -> dict:
     except Exception as e:
         err = str(e).lower()
         if "unsupported url" in err or "no video formats" in err:
-            return _get_generic_page_info(url)
+            return _get_generic_page_info(url, html=html)
         raise
 
     formats = []

@@ -5,6 +5,7 @@
   "description": "Download videos from YouTube, yfsp.tv and 1000+ sites",
   "permissions": [
     "activeTab",
+    "scripting",
     "storage"
   ],
   "host_permissions": [

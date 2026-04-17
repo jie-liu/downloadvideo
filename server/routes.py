@@ -16,8 +16,9 @@ def info():
     url = data.get("url", "").strip()
     if not url:
         return jsonify({"error": "url is required"}), 400
+    html = data.get("html")
     try:
-        result = get_info(url)
+        result = get_info(url, html=html)
         return jsonify(result)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
