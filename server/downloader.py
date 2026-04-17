@@ -185,11 +185,17 @@ def _do_download(task_id: str, url: str, format_id: str, output_dir: str):
             _tasks[task_id]["status"] = "downloading"
             _tasks[task_id]["progress"] = (downloaded / total * 100) if total else 0
             _tasks[task_id]["filename"] = d.get("filename")
+        # 不在 finished 里设置 done，等后处理钩子
         elif d["status"] == "finished":
+            _tasks[task_id]["progress"] = 99.0  # 接近完成，等后处理
+
+    def postprocessor_hook(d):
+        if d["status"] == "finished":
             _tasks[task_id]["status"] = "done"
             _tasks[task_id]["progress"] = 100.0
+            if d.get("info_dict", {}).get("filepath"):
+                _tasks[task_id]["filename"] = d["info_dict"]["filepath"]
 
-    # yfsp.tv: 从 _tasks 中取出实际 m3u8 URL
     direct_url = _tasks[task_id].get("_direct_url")
     actual_url = direct_url if direct_url else url
 
@@ -198,6 +204,7 @@ def _do_download(task_id: str, url: str, format_id: str, output_dir: str):
         "outtmpl": os.path.join(output_dir, "%(title)s.%(ext)s"),
         "continuedl": True,
         "progress_hooks": [progress_hook],
+        "postprocessor_hooks": [postprocessor_hook],
         "quiet": True,
         "no_warnings": True,
     }
@@ -205,10 +212,18 @@ def _do_download(task_id: str, url: str, format_id: str, output_dir: str):
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([actual_url])
+        # 如果 postprocessor_hook 没有触发（纯流媒体无后处理），确保设为 done
+        if _tasks[task_id]["status"] not in ("done", "error"):
+            _tasks[task_id]["status"] = "done"
+            _tasks[task_id]["progress"] = 100.0
     except Exception as e:
         _tasks[task_id]["status"] = "error"
         _tasks[task_id]["error"] = str(e)
 
 
 def get_task_status(task_id: str) -> dict:
-    return _tasks.get(task_id, {"status": "not_found"})
+    task = _tasks.get(task_id)
+    if task is None:
+        return {"status": "not_found"}
+    # 过滤内部字段，不暴露给客户端
+    return {k: v for k, v in task.items() if not k.startswith("_")}

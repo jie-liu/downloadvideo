@@ -105,9 +105,13 @@ function startProgressPolling(taskId) {
   show("download-progress");
   $("progress-text").textContent = "下载中...";
 
+  let failCount = 0;
+  const MAX_FAILS = 3;
+
   const timer = setInterval(async () => {
     try {
       const status = await pollStatus(taskId);
+      failCount = 0; // 成功后重置
 
       if (status.status === "downloading" || status.status === "started") {
         const pct = Math.round(status.progress || 0);
@@ -128,8 +132,11 @@ function startProgressPolling(taskId) {
         show("video-info");
       }
     } catch {
-      clearInterval(timer);
-      showError("无法获取下载状态");
+      failCount++;
+      if (failCount >= MAX_FAILS) {
+        clearInterval(timer);
+        showError("无法获取下载状态（网络连接问题）");
+      }
     }
   }, POLL_INTERVAL);
 }
