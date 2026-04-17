@@ -103,6 +103,83 @@ def _get_yfsp_info(url: str) -> dict:
     return {"title": title, "formats": formats}
 
 
+def _get_generic_page_info(url: str) -> dict:
+    """通用页面提取器：当 yt-dlp 不支持时，扫描页面源码找 m3u8/mp4 链接"""
+    import re
+
+    resp = requests.get(
+        url,
+        headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
+        timeout=15,
+    )
+    resp.raise_for_status()
+    content = resp.text
+
+    # 提取标题
+    title_match = re.search(r'<title[^>]*>([^<]+)</title>', content, re.IGNORECASE)
+    title = title_match.group(1).strip() if title_match else url
+
+    # 收集视频 URL：先找直接出现的 m3u8/mp4 URL（含 \/ 转义形式）
+    video_urls = []
+    for u in re.findall(r'https?:(?:\\?/){2}[^\s\'"<>]+\.m3u8[^\s\'"<>]*', content):
+        video_urls.append(u.replace('\\/', '/'))
+
+    # 找 JSON 字段中的 url（如 player_aaaa={"url":"..."}，值可能含 \/ 转义）
+    for raw in re.findall(r'"url"\s*:\s*"([^"]+)"', content):
+        clean = raw.replace('\\/', '/')
+        if not clean.startswith('http'):
+            clean = 'https:' + clean
+        if '.m3u8' in clean or '.mp4' in clean:
+            video_urls.append(clean)
+
+    # 去重保序
+    seen = set()
+    unique_urls = []
+    for u in video_urls:
+        if u not in seen:
+            seen.add(u)
+            unique_urls.append(u)
+
+    if not unique_urls:
+        raise ValueError("页面中未找到视频链接，该网站可能不受支持")
+
+    # 对每个视频 URL 用 yt-dlp 获取格式信息
+    formats = []
+    for i, video_url in enumerate(unique_urls):
+        try:
+            ydl_opts = {"quiet": True, "no_warnings": True}
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(video_url, download=False)
+            for f in info.get("formats", []):
+                filesize = f.get("filesize")
+                filesize_approx = f.get("filesize_approx")
+                resolution = f.get("resolution") or (
+                    f"{f.get('width')}x{f.get('height')}" if f.get("width") else "unknown"
+                )
+                formats.append({
+                    "format_id": f.get("format_id", f"generic_{i}"),
+                    "resolution": resolution,
+                    "ext": f.get("ext", "mp4"),
+                    "filesize": filesize,
+                    "filesize_approx": filesize_approx,
+                    "display_size": _human_size(filesize or filesize_approx),
+                    "_direct_url": video_url,
+                })
+        except Exception:
+            formats.append({
+                "format_id": f"generic_{i}",
+                "resolution": "unknown",
+                "ext": "mp4",
+                "filesize": None,
+                "filesize_approx": None,
+                "display_size": "Unknown",
+                "_direct_url": video_url,
+            })
+
+    formats.sort(key=lambda x: (x["filesize"] or x["filesize_approx"] or -1), reverse=True)
+    return {"title": title, "formats": formats}
+
+
 def _human_size(size_bytes) -> str:
     if size_bytes is None:
         return "Unknown"
@@ -125,8 +202,14 @@ def get_info(url: str) -> dict:
         "no_warnings": True,
         "skip_download": True,
     }
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=False)
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+    except Exception as e:
+        err = str(e).lower()
+        if "unsupported url" in err or "no video formats" in err:
+            return _get_generic_page_info(url)
+        raise
 
     formats = []
     for f in info.get("formats", []):
