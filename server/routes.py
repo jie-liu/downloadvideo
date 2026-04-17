@@ -31,7 +31,8 @@ def start_download():
     if not url or not format_id:
         return jsonify({"error": "url and format_id are required"}), 400
     output_dir = data.get("output_dir", DEFAULT_OUTPUT_DIR)
-    task_id = download(url, format_id, output_dir)
+    direct_url = data.get("direct_url")  # 可选：yfsp.tv 等自定义提取器使用
+    task_id = download(url, format_id, output_dir, direct_url=direct_url)
     return jsonify({"task_id": task_id, "status": "started"})
 
 
