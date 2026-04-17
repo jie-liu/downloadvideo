@@ -353,25 +353,47 @@ def _is_ts_stream(filepath: str) -> bool:
         return False
 
 
+def _find_ffmpeg() -> str:
+    """找 ffmpeg 可执行文件路径。"""
+    import shutil
+    # 优先找系统 PATH 里的
+    found = shutil.which("ffmpeg")
+    if found:
+        return found
+    # 常见手动安装位置
+    for candidate in [
+        os.path.expanduser("~/bin/ffmpeg"),
+        "/usr/local/bin/ffmpeg",
+        "/opt/homebrew/bin/ffmpeg",
+        "/usr/bin/ffmpeg",
+    ]:
+        if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+            return candidate
+    return ""
+
+
 def _remux_ts_to_mp4(src: str) -> str:
     """用 ffmpeg 把 TS 流 remux 成标准 MP4，成功返回新路径，失败返回原路径。"""
     import subprocess
+    ffmpeg = _find_ffmpeg()
+    if not ffmpeg:
+        return src  # ffmpeg 不可用，保留原文件
     base, _ = os.path.splitext(src)
     dst = base + ".mp4"
     if dst == src:
         dst = base + "_remuxed.mp4"
     try:
         result = subprocess.run(
-            ["ffmpeg", "-y", "-i", src, "-c", "copy", "-movflags", "+faststart", dst],
+            [ffmpeg, "-y", "-i", src, "-c", "copy", "-movflags", "+faststart", dst],
             capture_output=True,
             timeout=600,
         )
         if result.returncode == 0 and os.path.exists(dst):
             os.remove(src)   # 删掉原始 TS 文件
             return dst
-    except (FileNotFoundError, subprocess.TimeoutExpired):
+    except subprocess.TimeoutExpired:
         pass
-    return src  # ffmpeg 不可用或失败，返回原文件
+    return src  # 失败，返回原文件
 
 
 def _sanitize_filename(name: str) -> str:
