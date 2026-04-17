@@ -12,6 +12,10 @@ def _is_yfsp_url(url: str) -> bool:
     return "yfsp.tv" in url or "miolive.tv" in url
 
 
+def _is_taiav_url(url: str) -> bool:
+    return any(h in url for h in ("taiav.com", "bangerspis.xyz", "rapidtai.com", "m1fuping.lol", "taimadou.com"))
+
+
 def _get_yfsp_info(url: str) -> dict:
     """yfsp.tv 自定义提取器"""
     import re
@@ -99,6 +103,70 @@ def _get_yfsp_info(url: str) -> dict:
 
     # 按 filesize_approx 降序排列（bandwidth 大的在前）
     formats.sort(key=lambda x: (x["filesize_approx"] or -1), reverse=True)
+
+    return {"title": title, "formats": formats}
+
+
+def _get_taiav_info(url: str) -> dict:
+    """taiav.com 自定义提取器：调用 /api/getmovie 获取 m3u8"""
+    import re
+
+    # 提取视频 ID
+    match = re.search(r'/movie/([a-f0-9]+)', url)
+    if not match:
+        raise ValueError(f"无法从 URL 提取视频 ID: {url}")
+    video_id = match.group(1)
+    base_url = "https://taiav.com"
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Referer": url,
+    }
+
+    # 获取页面标题
+    title = video_id
+    try:
+        page_resp = requests.get(url, headers=headers, timeout=10)
+        title_match = re.search(r'<title[^>]*>([^<]+)</title>', page_resp.text, re.IGNORECASE)
+        if title_match:
+            raw = title_match.group(1).strip()
+            # 去掉末尾的站名后缀
+            raw = re.sub(r'\s*[-|]\s*Taiav\.com.*$', '', raw, flags=re.IGNORECASE).strip()
+            if raw:
+                title = raw
+    except Exception:
+        pass
+
+    # 按清晰度顺序尝试（高→低），拿到第一个可用的
+    formats = []
+    for hd in ["1280", "720", "480"]:
+        try:
+            resp = requests.get(
+                f"{base_url}/api/getmovie?type={hd}&id={video_id}",
+                headers=headers,
+                timeout=15,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            if not data.get("m3u8"):
+                continue
+            m3u8_url = base_url + data["m3u8"]
+            resolution_map = {"1280": "1280x720 (HD)", "720": "720x480", "480": "480x270"}
+            formats.append({
+                "format_id": f"taiav_{hd}",
+                "resolution": resolution_map.get(hd, hd),
+                "ext": "mp4",
+                "filesize": None,
+                "filesize_approx": int(hd) * 100000,  # 粗略估计用于排序
+                "display_size": "Unknown",
+                "_direct_url": m3u8_url,
+                "_referer": url,
+            })
+        except Exception:
+            continue
+
+    if not formats:
+        raise ValueError("无法获取 taiav.com 视频链接，可能需要登录或视频不存在")
 
     return {"title": title, "formats": formats}
 
@@ -201,6 +269,10 @@ def get_info(url: str, html: str = None) -> dict:
     if _is_yfsp_url(url):
         return _get_yfsp_info(url)
 
+    # taiav.com 使用自定义提取器
+    if _is_taiav_url(url):
+        return _get_taiav_info(url)
+
     ydl_opts = {
         "quiet": True,
         "no_warnings": True,
@@ -244,7 +316,7 @@ def get_info(url: str, html: str = None) -> dict:
     }
 
 
-def download(url: str, format_id: str, output_dir: str, direct_url: str = None) -> str:
+def download(url: str, format_id: str, output_dir: str, direct_url: str = None, referer: str = None) -> str:
     task_id = str(uuid.uuid4())[:8]
     output_dir = os.path.expanduser(output_dir)
     _tasks[task_id] = {
@@ -252,7 +324,8 @@ def download(url: str, format_id: str, output_dir: str, direct_url: str = None) 
         "progress": 0.0,
         "filename": None,
         "error": None,
-        "_direct_url": direct_url,  # yfsp.tv 等用到
+        "_direct_url": direct_url,  # yfsp.tv / taiav.com 等用到
+        "_referer": referer,         # taiav.com AES-128 key 解密需要
     }
 
     thread = threading.Thread(
@@ -284,6 +357,7 @@ def _do_download(task_id: str, url: str, format_id: str, output_dir: str):
                 _tasks[task_id]["filename"] = d["info_dict"]["filepath"]
 
     direct_url = _tasks[task_id].get("_direct_url")
+    referer = _tasks[task_id].get("_referer")
     actual_url = direct_url if direct_url else url
 
     ydl_opts = {
@@ -295,6 +369,8 @@ def _do_download(task_id: str, url: str, format_id: str, output_dir: str):
         "quiet": True,
         "no_warnings": True,
     }
+    if referer:
+        ydl_opts["http_headers"] = {"Referer": referer}
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:

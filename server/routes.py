@@ -32,7 +32,8 @@ def start_download():
     if not url or not format_id:
         return jsonify({"error": "url and format_id are required"}), 400
     direct_url = data.get("direct_url")
-    task_id = download(url, format_id, DEFAULT_OUTPUT_DIR, direct_url=direct_url)
+    referer = data.get("referer")
+    task_id = download(url, format_id, DEFAULT_OUTPUT_DIR, direct_url=direct_url, referer=referer)
     return jsonify({"task_id": task_id, "status": "started"})
 
 

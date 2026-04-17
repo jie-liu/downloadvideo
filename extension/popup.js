@@ -58,15 +58,18 @@ async function getVideoInfo(url, tabId) {
   return resp.json();
 }
 
-async function startDownload(url, formatId, directUrl) {
+async function startDownload(url, formatId, directUrl, referer) {
   const body = {
     url,
     format_id: formatId,
     output_dir: "~/Downloads",
   };
-  // yfsp.tv 等自定义提取器：传递直接的 m3u8 URL
+  // yfsp.tv / taiav.com 等自定义提取器：传递直接的 m3u8 URL
   if (directUrl) {
     body.direct_url = directUrl;
+  }
+  if (referer) {
+    body.referer = referer;
   }
   const resp = await fetch(`${SERVER}/api/download`, {
     method: "POST",
@@ -101,6 +104,7 @@ function renderFormats(title, formats) {
     // 把 _direct_url 存在 data 属性上（如果有）
     item.dataset.formatId = fmt.format_id;
     item.dataset.directUrl = fmt._direct_url || "";
+    item.dataset.referer = fmt._referer || "";
     item.innerHTML = `
       <div class="format-meta">
         <div class="format-resolution">${fmt.resolution}</div>
@@ -193,9 +197,10 @@ async function main() {
     const item = btn.closest(".format-item");
     const formatId = item.dataset.formatId;
     const directUrl = item.dataset.directUrl || null;
+    const referer = item.dataset.referer || null;
 
     try {
-      const { task_id } = await startDownload(url, formatId, directUrl);
+      const { task_id } = await startDownload(url, formatId, directUrl, referer);
       startProgressPolling(task_id);
     } catch (err) {
       document.querySelectorAll(".btn-download").forEach((b) => (b.disabled = false));
