@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Video Downloader</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Video Downloader</h1>
+    </header>
+
+    <div id="status-bar" class="status-bar hidden"></div>
+
+    <div id="server-offline" class="offline-notice hidden">
+      <p>本地服务未启动，请在终端运行：</p>
+      <code>cd server && python server.py</code>
+    </div>
+
+    <div id="loading" class="loading">
+      <div class="spinner"></div>
+      <p>正在分析视频...</p>
+    </div>
+
+    <div id="video-info" class="hidden">
+      <p id="video-title" class="video-title"></p>
+      <div id="formats-list" class="formats-list"></div>
+    </div>
+
+    <div id="download-progress" class="hidden">
+      <p id="progress-text">下载中...</p>
+      <div class="progress-bar">
+        <div id="progress-fill" class="progress-fill" style="width: 0%"></div>
+      </div>
+      <p id="progress-percent">0%</p>
+    </div>
+
+    <div id="download-done" class="hidden">
+      <p class="success-msg">✓ 下载完成</p>
+      <p id="saved-path" class="saved-path"></p>
+      <button id="btn-back" class="btn-secondary">返回</button>
+    </div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
