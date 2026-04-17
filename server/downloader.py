@@ -171,9 +171,10 @@ def _get_taiav_info(url: str) -> dict:
     return {"title": title, "formats": formats}
 
 
-def _get_generic_page_info(url: str, html: str = None) -> dict:
+def _get_generic_page_info(url: str, html: str = None, video_urls: list = None) -> dict:
     """通用页面提取器：当 yt-dlp 不支持时，扫描页面源码找 m3u8/mp4 链接。
-    html 由扩展直接传入时（Cloudflare 保护页面），跳过 HTTP 抓取。"""
+    html 由扩展直接传入时（Cloudflare 保护页面），跳过 HTTP 抓取。
+    video_urls 由扩展从 performance.getEntriesByType 获取，优先使用。"""
     import re
 
     if html:
@@ -191,23 +192,25 @@ def _get_generic_page_info(url: str, html: str = None) -> dict:
     title_match = re.search(r'<title[^>]*>([^<]+)</title>', content, re.IGNORECASE)
     title = title_match.group(1).strip() if title_match else url
 
-    # 收集视频 URL：先找直接出现的 m3u8/mp4 URL（含 \/ 转义形式）
-    video_urls = []
-    for u in re.findall(r'https?:(?:\\?/){2}[^\s\'"<>]+\.m3u8[^\s\'"<>]*', content):
-        video_urls.append(u.replace('\\/', '/'))
+    # 收集视频 URL：优先用扩展传来的（包含动态加载的资源）
+    collected = list(video_urls or [])
 
-    # 找 JSON 字段中的 url（如 player_aaaa={"url":"..."}，值可能含 \/ 转义）
+    # 再从 HTML 源码找（处理 \/ 转义形式）
+    for u in re.findall(r'https?:(?:\\?/){2}[^\s\'"<>]+\.m3u8[^\s\'"<>]*', content):
+        collected.append(u.replace('\\/', '/'))
+
+    # 找 JSON 字段中的 url
     for raw in re.findall(r'"url"\s*:\s*"([^"]+)"', content):
         clean = raw.replace('\\/', '/')
         if not clean.startswith('http'):
             clean = 'https:' + clean
         if '.m3u8' in clean or '.mp4' in clean:
-            video_urls.append(clean)
+            collected.append(clean)
 
     # 去重保序
     seen = set()
     unique_urls = []
-    for u in video_urls:
+    for u in collected:
         if u not in seen:
             seen.add(u)
             unique_urls.append(u)
@@ -264,56 +267,81 @@ def _human_size(size_bytes) -> str:
     return f"{size_bytes} B"
 
 
-def get_info(url: str, html: str = None) -> dict:
-    # yfsp.tv 使用自定义提取器
-    if _is_yfsp_url(url):
-        return _get_yfsp_info(url)
+def _parse_ytdlp_formats(info: dict) -> list:
+    """将 yt-dlp info dict 转换为统一 format 列表，视频按大小降序，音频追加末尾。"""
+    video_formats = []
+    audio_formats = []
 
-    # taiav.com 使用自定义提取器
-    if _is_taiav_url(url):
-        return _get_taiav_info(url)
-
-    ydl_opts = {
-        "quiet": True,
-        "no_warnings": True,
-        "skip_download": True,
-    }
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=False)
-    except Exception as e:
-        err = str(e).lower()
-        if "unsupported url" in err or "no video formats" in err:
-            return _get_generic_page_info(url, html=html)
-        raise
-
-    formats = []
     for f in info.get("formats", []):
         filesize = f.get("filesize")
         filesize_approx = f.get("filesize_approx")
         effective_size = filesize or filesize_approx
-        resolution = f.get("resolution") or (
-            f"{f.get('width', '?')}x{f.get('height', '?')}"
-            if f.get("width") else "audio only"
+        has_video = f.get("width") or f.get("height") or (
+            f.get("vcodec") and f.get("vcodec") != "none"
         )
-        formats.append({
-            "format_id": f.get("format_id"),
-            "resolution": resolution,
-            "ext": f.get("ext"),
-            "filesize": filesize,
-            "filesize_approx": filesize_approx,
-            "display_size": _human_size(effective_size),
-        })
+        has_audio = f.get("acodec") and f.get("acodec") != "none"
 
-    formats.sort(
-        key=lambda x: (x["filesize"] or x["filesize_approx"] or -1),
-        reverse=True,
-    )
+        if not has_video and has_audio:
+            # 纯音频格式
+            abr = f.get("abr")
+            audio_formats.append({
+                "format_id": f.get("format_id"),
+                "resolution": f"Audio {int(abr)}kbps" if abr else "Audio only",
+                "ext": f.get("ext"),
+                "filesize": filesize,
+                "filesize_approx": filesize_approx,
+                "display_size": _human_size(effective_size),
+                "is_audio": True,
+            })
+        elif has_video:
+            resolution = f.get("resolution") or (
+                f"{f.get('width')}x{f.get('height')}" if f.get("width") else "unknown"
+            )
+            video_formats.append({
+                "format_id": f.get("format_id"),
+                "resolution": resolution,
+                "ext": f.get("ext"),
+                "filesize": filesize,
+                "filesize_approx": filesize_approx,
+                "display_size": _human_size(effective_size),
+            })
 
-    return {
-        "title": info.get("title", "Unknown"),
-        "formats": formats,
-    }
+    # 视频按大小降序，音频按码率降序
+    video_formats.sort(key=lambda x: (x["filesize"] or x["filesize_approx"] or -1), reverse=True)
+    audio_formats.sort(key=lambda x: (x["filesize"] or x["filesize_approx"] or -1), reverse=True)
+    return video_formats + audio_formats
+
+
+def get_info(url: str, html: str = None, video_urls: list = None) -> dict:
+    """提取视频信息，按顺序尝试各提取器直到成功。"""
+    last_error = None
+
+    # 1. yt-dlp（支持 YouTube 等 1000+ 网站）
+    ydl_opts = {"quiet": True, "no_warnings": True, "skip_download": True}
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+        return {
+            "title": info.get("title", "Unknown"),
+            "formats": _parse_ytdlp_formats(info),
+        }
+    except Exception as e:
+        last_error = e
+
+    # 2. yfsp 风格（?v=<id> + MasterPlayList API）
+    try:
+        return _get_yfsp_info(url)
+    except Exception:
+        pass
+
+    # 3. taiav 风格（/movie/<hex-id> + /api/getmovie）
+    try:
+        return _get_taiav_info(url)
+    except Exception:
+        pass
+
+    # 4. 通用 HTML 扫描（含扩展传来的 HTML / video_urls）
+    return _get_generic_page_info(url, html=html, video_urls=video_urls)
 
 
 def download(url: str, format_id: str, output_dir: str, direct_url: str = None, referer: str = None) -> str:

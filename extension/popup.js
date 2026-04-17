@@ -30,22 +30,40 @@ async function pingServer() {
   }
 }
 
-async function getPageHtml(tabId) {
+async function getPageData(tabId) {
   try {
     const results = await chrome.scripting.executeScript({
       target: { tabId },
-      func: () => document.documentElement.outerHTML,
+      func: () => {
+        // 从资源时序中找所有 m3u8/mp4 请求 URL（包含动态加载的）
+        const videoUrls = performance
+          .getEntriesByType("resource")
+          .map((e) => e.name)
+          .filter((u) => /\.(m3u8|mp4|ts)(\?|$)/i.test(u));
+
+        // 从 video/source 元素找 src
+        document.querySelectorAll("video[src], source[src]").forEach((el) => {
+          const s = el.src || el.getAttribute("src");
+          if (s && /\.(m3u8|mp4)/i.test(s)) videoUrls.push(s);
+        });
+
+        return {
+          html: document.documentElement.outerHTML,
+          videoUrls: [...new Set(videoUrls)],
+        };
+      },
     });
-    return results?.[0]?.result || null;
+    return results?.[0]?.result || { html: null, videoUrls: [] };
   } catch {
-    return null;
+    return { html: null, videoUrls: [] };
   }
 }
 
 async function getVideoInfo(url, tabId) {
-  const html = await getPageHtml(tabId);
+  const { html, videoUrls } = await getPageData(tabId);
   const body = { url };
   if (html) body.html = html;
+  if (videoUrls && videoUrls.length > 0) body.video_urls = videoUrls;
   const resp = await fetch(`${SERVER}/api/info`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -98,16 +116,18 @@ function renderFormats(title, formats) {
     return;
   }
 
-  formats.forEach((fmt) => {
+  formats.forEach((fmt, idx) => {
     const item = document.createElement("div");
-    item.className = "format-item";
-    // 把 _direct_url 存在 data 属性上（如果有）
+    item.className = "format-item" + (fmt.is_audio ? " format-audio" : "");
     item.dataset.formatId = fmt.format_id;
     item.dataset.directUrl = fmt._direct_url || "";
     item.dataset.referer = fmt._referer || "";
+    const badge = idx === 0 && !fmt.is_audio
+      ? '<span class="badge-best">最高画质</span>'
+      : (fmt.is_audio ? '<span class="badge-audio">仅音频</span>' : "");
     item.innerHTML = `
       <div class="format-meta">
-        <div class="format-resolution">${fmt.resolution}</div>
+        <div class="format-resolution">${fmt.resolution}${badge}</div>
         <div class="format-detail">${(fmt.ext || "").toUpperCase()} · ${fmt.display_size}</div>
       </div>
       <button class="btn-download">下载</button>

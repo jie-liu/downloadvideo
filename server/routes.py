@@ -17,8 +17,9 @@ def info():
     if not url:
         return jsonify({"error": "url is required"}), 400
     html = data.get("html")
+    video_urls = data.get("video_urls") or []
     try:
-        result = get_info(url, html=html)
+        result = get_info(url, html=html, video_urls=video_urls)
         return jsonify(result)
     except Exception as e:
         return jsonify({"error": str(e)}), 500

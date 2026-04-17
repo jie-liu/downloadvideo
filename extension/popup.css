@@ -79,8 +79,29 @@ header h1 {
 }
 
 .format-meta { flex: 1; }
-.format-resolution { font-weight: 600; color: #e0e0e0; }
+.format-resolution { font-weight: 600; color: #e0e0e0; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .format-detail { font-size: 11px; color: #888; margin-top: 2px; }
+
+.format-audio { border-color: #2a4a2a; background: #0e1e0e; }
+.format-audio .btn-download { background: #66bb6a; }
+.format-audio .btn-download:hover { background: #81c784; }
+
+.badge-best {
+  font-size: 10px;
+  font-weight: 700;
+  color: #0a0a1a;
+  background: #ffd54f;
+  border-radius: 3px;
+  padding: 1px 5px;
+}
+.badge-audio {
+  font-size: 10px;
+  font-weight: 700;
+  color: #0a1a0a;
+  background: #66bb6a;
+  border-radius: 3px;
+  padding: 1px 5px;
+}
 
 .btn-download {
   background: #4fc3f7;
