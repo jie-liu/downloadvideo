@@ -387,7 +387,10 @@ def _remux_ts_to_mp4(src: str) -> str:
             capture_output=True,
             timeout=600,
         )
-        if result.returncode == 0 and os.path.exists(tmp):
+        # 检查输出文件是否是合法 MP4（有 ftyp box），不完全依赖退出码
+        # 某些静态编译的 ffmpeg 转换成功但仍返回非零退出码
+        output_valid = os.path.exists(tmp) and not _is_ts_stream(tmp)
+        if output_valid:
             os.remove(src)       # 删掉原始 TS 文件
             os.rename(tmp, src)  # 用标准 MP4 替换，保持文件名
             return src
