@@ -460,9 +460,11 @@ def _do_download(task_id: str, url: str, format_id: str, output_dir: str):
             _tasks[task_id]["status"] = "downloading"
             _tasks[task_id]["progress"] = (downloaded / total * 100) if total else 0
             _tasks[task_id]["filename"] = d.get("filename")
-        # 不在 finished 里设置 done，等后处理钩子
         elif d["status"] == "finished":
             _tasks[task_id]["progress"] = 99.0  # 接近完成，等后处理
+            # finished 时 filename 是最终合并文件路径（重要：HLS 拼接后的真实文件）
+            if d.get("filename"):
+                _tasks[task_id]["filename"] = d["filename"]
 
     def postprocessor_hook(d):
         if d["status"] == "finished":
