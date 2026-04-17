@@ -61,3 +61,32 @@ def test_get_info_display_size_human_readable(mocker):
     assert "MB" in result["formats"][0]["display_size"] or "GB" in result["formats"][0]["display_size"]
     # 无大小的应显示 Unknown
     assert result["formats"][3]["display_size"] == "Unknown"
+
+def test_download_returns_task_id(mocker):
+    from downloader import download
+    mock_ydl = MagicMock()
+    mock_ydl.__enter__ = MagicMock(return_value=mock_ydl)
+    mock_ydl.__exit__ = MagicMock(return_value=False)
+    mock_ydl.download = MagicMock(return_value=None)
+    mocker.patch("downloader.yt_dlp.YoutubeDL", return_value=mock_ydl)
+
+    task_id = download("https://example.com/video", "137", "/tmp")
+    assert isinstance(task_id, str)
+    assert len(task_id) > 0
+
+def test_get_task_status_returns_started(mocker):
+    from downloader import download, get_task_status
+    mock_ydl = MagicMock()
+    mock_ydl.__enter__ = MagicMock(return_value=mock_ydl)
+    mock_ydl.__exit__ = MagicMock(return_value=False)
+    mock_ydl.download = MagicMock(return_value=None)
+    mocker.patch("downloader.yt_dlp.YoutubeDL", return_value=mock_ydl)
+
+    task_id = download("https://example.com/video", "22", "/tmp")
+    status = get_task_status(task_id)
+    assert status["status"] in ("started", "downloading", "done")
+
+def test_get_task_status_unknown_task():
+    from downloader import get_task_status
+    status = get_task_status("nonexistent-task-id")
+    assert status["status"] == "not_found"

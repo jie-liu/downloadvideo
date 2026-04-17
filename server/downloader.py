@@ -55,3 +55,55 @@ def get_info(url: str) -> dict:
         "title": info.get("title", "Unknown"),
         "formats": formats,
     }
+
+
+def download(url: str, format_id: str, output_dir: str) -> str:
+    task_id = str(uuid.uuid4())[:8]
+    output_dir = os.path.expanduser(output_dir)
+    _tasks[task_id] = {
+        "status": "started",
+        "progress": 0.0,
+        "filename": None,
+        "error": None,
+    }
+
+    thread = threading.Thread(
+        target=_do_download,
+        args=(task_id, url, format_id, output_dir),
+        daemon=True,
+    )
+    thread.start()
+    return task_id
+
+
+def _do_download(task_id: str, url: str, format_id: str, output_dir: str):
+    def progress_hook(d):
+        if d["status"] == "downloading":
+            total = d.get("total_bytes") or d.get("total_bytes_estimate") or 0
+            downloaded = d.get("downloaded_bytes", 0)
+            _tasks[task_id]["status"] = "downloading"
+            _tasks[task_id]["progress"] = (downloaded / total * 100) if total else 0
+            _tasks[task_id]["filename"] = d.get("filename")
+        elif d["status"] == "finished":
+            _tasks[task_id]["status"] = "done"
+            _tasks[task_id]["progress"] = 100.0
+
+    ydl_opts = {
+        "format": format_id,
+        "outtmpl": os.path.join(output_dir, "%(title)s.%(ext)s"),
+        "continuedl": True,
+        "progress_hooks": [progress_hook],
+        "quiet": True,
+        "no_warnings": True,
+    }
+
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([url])
+    except Exception as e:
+        _tasks[task_id]["status"] = "error"
+        _tasks[task_id]["error"] = str(e)
+
+
+def get_task_status(task_id: str) -> dict:
+    return _tasks.get(task_id, {"status": "not_found"})
