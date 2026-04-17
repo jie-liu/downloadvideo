@@ -344,7 +344,30 @@ def get_info(url: str, html: str = None, video_urls: list = None) -> dict:
     return _get_generic_page_info(url, html=html, video_urls=video_urls)
 
 
-def download(url: str, format_id: str, output_dir: str, direct_url: str = None, referer: str = None) -> str:
+def _sanitize_filename(name: str) -> str:
+    """移除文件名中不合法的字符。"""
+    import re
+    name = re.sub(r'[\\/:*?"<>|]', '_', name)
+    return name.strip()[:200] or "video"
+
+
+def cancel_download(task_id: str) -> bool:
+    task = _tasks.get(task_id)
+    if not task:
+        return False
+    task["_cancelled"] = True
+    task["status"] = "cancelled"
+    # 尝试关闭 yt-dlp 底层请求会话以中断下载
+    ydl = task.get("_ydl")
+    if ydl:
+        try:
+            ydl.close()
+        except Exception:
+            pass
+    return True
+
+
+def download(url: str, format_id: str, output_dir: str, direct_url: str = None, referer: str = None, title: str = None) -> str:
     task_id = str(uuid.uuid4())[:8]
     output_dir = os.path.expanduser(output_dir)
     _tasks[task_id] = {
@@ -352,8 +375,11 @@ def download(url: str, format_id: str, output_dir: str, direct_url: str = None, 
         "progress": 0.0,
         "filename": None,
         "error": None,
-        "_direct_url": direct_url,  # yfsp.tv / taiav.com 等用到
-        "_referer": referer,         # taiav.com AES-128 key 解密需要
+        "_direct_url": direct_url,
+        "_referer": referer,
+        "_title": title,
+        "_cancelled": False,
+        "_ydl": None,
     }
 
     thread = threading.Thread(
@@ -386,11 +412,18 @@ def _do_download(task_id: str, url: str, format_id: str, output_dir: str):
 
     direct_url = _tasks[task_id].get("_direct_url")
     referer = _tasks[task_id].get("_referer")
+    title = _tasks[task_id].get("_title")
     actual_url = direct_url if direct_url else url
+
+    # 构建输出文件名：优先用已知标题，否则让 yt-dlp 自己提取
+    if title:
+        outtmpl = os.path.join(output_dir, f"{_sanitize_filename(title)}.%(ext)s")
+    else:
+        outtmpl = os.path.join(output_dir, "%(title)s.%(ext)s")
 
     ydl_opts = {
         "format": "best" if direct_url else format_id,
-        "outtmpl": os.path.join(output_dir, "%(title)s.%(ext)s"),
+        "outtmpl": outtmpl,
         "continuedl": True,
         "progress_hooks": [progress_hook],
         "postprocessor_hooks": [postprocessor_hook],
@@ -400,16 +433,26 @@ def _do_download(task_id: str, url: str, format_id: str, output_dir: str):
     if referer:
         ydl_opts["http_headers"] = {"Referer": referer}
 
+    ydl = yt_dlp.YoutubeDL(ydl_opts)
+    _tasks[task_id]["_ydl"] = ydl
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([actual_url])
-        # 如果 postprocessor_hook 没有触发（纯流媒体无后处理），确保设为 done
-        if _tasks[task_id]["status"] not in ("done", "error"):
+        ydl.download([actual_url])
+        # postprocessor_hook 未触发时（纯流媒体无后处理）确保设为 done
+        if _tasks[task_id]["status"] not in ("done", "error", "cancelled"):
             _tasks[task_id]["status"] = "done"
             _tasks[task_id]["progress"] = 100.0
     except Exception as e:
-        _tasks[task_id]["status"] = "error"
-        _tasks[task_id]["error"] = str(e)
+        if _tasks[task_id].get("_cancelled"):
+            _tasks[task_id]["status"] = "cancelled"
+        else:
+            _tasks[task_id]["status"] = "error"
+            _tasks[task_id]["error"] = str(e)
+    finally:
+        try:
+            ydl.__exit__(None, None, None)
+        except Exception:
+            pass
+        _tasks[task_id]["_ydl"] = None
 
 
 def get_task_status(task_id: str) -> dict:

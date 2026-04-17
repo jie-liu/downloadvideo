@@ -118,6 +118,32 @@ header h1 {
 .btn-download:hover { background: #81d4fa; }
 .btn-download:disabled { background: #555; color: #888; cursor: default; }
 
+.progress-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 2px;
+}
+.progress-header #progress-text { margin: 0; }
+
+.btn-cancel {
+  background: none;
+  border: 1px solid #555;
+  color: #aaa;
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: border-color 0.15s, color 0.15s;
+}
+.btn-cancel:hover { border-color: #ff6b6b; color: #ff6b6b; }
+
 .progress-bar {
   background: #333;
   border-radius: 4px;

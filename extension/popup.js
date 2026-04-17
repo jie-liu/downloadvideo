@@ -35,11 +35,11 @@ async function getPageData(tabId) {
     const results = await chrome.scripting.executeScript({
       target: { tabId },
       func: () => {
-        // 从资源时序中找所有 m3u8/mp4 请求 URL（包含动态加载的）
+        // 从资源时序中找 m3u8/mp4 请求 URL（不含 .ts 分片，避免干扰提取器）
         const videoUrls = performance
           .getEntriesByType("resource")
           .map((e) => e.name)
-          .filter((u) => /\.(m3u8|mp4|ts)(\?|$)/i.test(u));
+          .filter((u) => /\.(m3u8|mp4)(\?|$)/i.test(u));
 
         // 从 video/source 元素找 src
         document.querySelectorAll("video[src], source[src]").forEach((el) => {
@@ -76,19 +76,23 @@ async function getVideoInfo(url, tabId) {
   return resp.json();
 }
 
-async function startDownload(url, formatId, directUrl, referer) {
+async function cancelDownload(taskId) {
+  try {
+    await fetch(`${SERVER}/api/cancel?task_id=${taskId}`, { method: "POST" });
+  } catch {
+    // ignore
+  }
+}
+
+async function startDownload(url, formatId, directUrl, referer, title) {
   const body = {
     url,
     format_id: formatId,
     output_dir: "~/Downloads",
   };
-  // yfsp.tv / taiav.com 等自定义提取器：传递直接的 m3u8 URL
-  if (directUrl) {
-    body.direct_url = directUrl;
-  }
-  if (referer) {
-    body.referer = referer;
-  }
+  if (directUrl) body.direct_url = directUrl;
+  if (referer) body.referer = referer;
+  if (title) body.title = title;
   const resp = await fetch(`${SERVER}/api/download`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -143,37 +147,54 @@ function startProgressPolling(taskId) {
   hide("status-bar");
   show("download-progress");
   $("progress-text").textContent = "下载中...";
+  $("progress-fill").style.width = "0%";
+  $("progress-percent").textContent = "0%";
 
   let failCount = 0;
   const MAX_FAILS = 3;
 
+  const stop = (restoreFormats = false) => {
+    clearInterval(timer);
+    hide("download-progress");
+    if (restoreFormats) {
+      document.querySelectorAll(".btn-download").forEach((b) => (b.disabled = false));
+      show("video-info");
+    }
+  };
+
+  $("btn-cancel").onclick = async () => {
+    await cancelDownload(taskId);
+    stop(true);
+    showInfo("下载已取消");
+  };
+
   const timer = setInterval(async () => {
     try {
       const status = await pollStatus(taskId);
-      failCount = 0; // 成功后重置
+      failCount = 0;
 
       if (status.status === "downloading" || status.status === "started") {
         const pct = Math.round(status.progress || 0);
         $("progress-fill").style.width = `${pct}%`;
         $("progress-percent").textContent = `${pct}%`;
       } else if (status.status === "done") {
-        clearInterval(timer);
-        hide("download-progress");
+        stop();
         const filename = status.filename
           ? status.filename.split("/").pop()
           : "视频文件";
         $("saved-path").textContent = `~/Downloads/${filename}`;
         show("download-done");
+      } else if (status.status === "cancelled") {
+        stop(true);
+        showInfo("下载已取消");
       } else if (status.status === "error") {
-        clearInterval(timer);
-        hide("download-progress");
+        stop(true);
         showError(`下载失败：${status.error}`);
-        show("video-info");
       }
     } catch {
       failCount++;
       if (failCount >= MAX_FAILS) {
-        clearInterval(timer);
+        stop(true);
         showError("无法获取下载状态（网络连接问题）");
       }
     }
@@ -218,9 +239,10 @@ async function main() {
     const formatId = item.dataset.formatId;
     const directUrl = item.dataset.directUrl || null;
     const referer = item.dataset.referer || null;
+    const title = $("video-title").textContent || null;
 
     try {
-      const { task_id } = await startDownload(url, formatId, directUrl, referer);
+      const { task_id } = await startDownload(url, formatId, directUrl, referer, title);
       startProgressPolling(task_id);
     } catch (err) {
       document.querySelectorAll(".btn-download").forEach((b) => (b.disabled = false));

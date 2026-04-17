@@ -30,7 +30,10 @@
     </div>
 
     <div id="download-progress" class="hidden">
-      <p id="progress-text">下载中...</p>
+      <div class="progress-header">
+        <p id="progress-text">下载中...</p>
+        <button id="btn-cancel" class="btn-cancel" title="取消下载">✕</button>
+      </div>
       <div class="progress-bar">
         <div id="progress-fill" class="progress-fill" style="width: 0%"></div>
       </div>

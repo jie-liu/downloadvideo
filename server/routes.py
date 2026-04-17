@@ -34,8 +34,17 @@ def start_download():
         return jsonify({"error": "url and format_id are required"}), 400
     direct_url = data.get("direct_url")
     referer = data.get("referer")
-    task_id = download(url, format_id, DEFAULT_OUTPUT_DIR, direct_url=direct_url, referer=referer)
+    title = data.get("title", "").strip() or None
+    task_id = download(url, format_id, DEFAULT_OUTPUT_DIR, direct_url=direct_url, referer=referer, title=title)
     return jsonify({"task_id": task_id, "status": "started"})
+
+
+@bp.post("/cancel")
+def cancel():
+    task_id = request.args.get("task_id", "")
+    from downloader import cancel_download
+    ok = cancel_download(task_id)
+    return jsonify({"ok": ok})
 
 
 @bp.get("/status")
