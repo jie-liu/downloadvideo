@@ -169,7 +169,7 @@ for f in info.get("formats", []):
     formats.append({...})
 
 # 按 filesize 降序，None 排末尾
-formats.sort(key=lambda x: x["filesize"] or -1, reverse=True)
+formats.sort(key=lambda x: x["filesize"] or x["filesize_approx"] or -1, reverse=True)
 
 # download：后台线程执行，更新 task 状态
 ydl_opts = {
