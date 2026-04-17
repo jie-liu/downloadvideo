@@ -97,7 +97,7 @@ def _get_yfsp_info(url: str) -> dict:
             "ext": "mp4",
             "filesize": None,
             "filesize_approx": None,
-            "display_size": "Unknown",
+            "display_size": _human_size(None),
             "_direct_url": api_url,
         })
 
@@ -158,7 +158,7 @@ def _get_taiav_info(url: str) -> dict:
                 "ext": "mp4",
                 "filesize": None,
                 "filesize_approx": int(hd) * 100000,  # 粗略估计用于排序
-                "display_size": "Unknown",
+                "display_size": _human_size(None),
                 "_direct_url": m3u8_url,
                 "_referer": url,
             })
@@ -247,7 +247,7 @@ def _get_generic_page_info(url: str, html: str = None, video_urls: list = None) 
                 "ext": "mp4",
                 "filesize": None,
                 "filesize_approx": None,
-                "display_size": "Unknown",
+                "display_size": _human_size(None),
                 "_direct_url": video_url,
             })
 
