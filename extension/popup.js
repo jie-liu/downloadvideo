@@ -173,7 +173,12 @@ function startProgressPolling(taskId) {
       const status = await pollStatus(taskId);
       failCount = 0;
 
-      if (status.status === "downloading" || status.status === "started") {
+      if (status.status === "remuxing") {
+        $("progress-text").textContent = "转换格式中...";
+        $("progress-fill").style.width = "99%";
+        $("progress-percent").textContent = "99%";
+      } else if (status.status === "downloading" || status.status === "started") {
+        $("progress-text").textContent = "下载中...";
         const pct = Math.round(status.progress || 0);
         $("progress-fill").style.width = `${pct}%`;
         $("progress-percent").textContent = `${pct}%`;

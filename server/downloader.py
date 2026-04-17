@@ -344,6 +344,36 @@ def get_info(url: str, html: str = None, video_urls: list = None) -> dict:
     return _get_generic_page_info(url, html=html, video_urls=video_urls)
 
 
+def _is_ts_stream(filepath: str) -> bool:
+    """检查文件是否为 MPEG-TS 流（首字节为 0x47 同步字节）。"""
+    try:
+        with open(filepath, "rb") as f:
+            return f.read(1) == b"\x47"
+    except Exception:
+        return False
+
+
+def _remux_ts_to_mp4(src: str) -> str:
+    """用 ffmpeg 把 TS 流 remux 成标准 MP4，成功返回新路径，失败返回原路径。"""
+    import subprocess
+    base, _ = os.path.splitext(src)
+    dst = base + ".mp4"
+    if dst == src:
+        dst = base + "_remuxed.mp4"
+    try:
+        result = subprocess.run(
+            ["ffmpeg", "-y", "-i", src, "-c", "copy", "-movflags", "+faststart", dst],
+            capture_output=True,
+            timeout=600,
+        )
+        if result.returncode == 0 and os.path.exists(dst):
+            os.remove(src)   # 删掉原始 TS 文件
+            return dst
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+    return src  # ffmpeg 不可用或失败，返回原文件
+
+
 def _sanitize_filename(name: str) -> str:
     """移除文件名中不合法的字符。"""
     import re
@@ -441,6 +471,15 @@ def _do_download(task_id: str, url: str, format_id: str, output_dir: str):
         if _tasks[task_id]["status"] not in ("done", "error", "cancelled"):
             _tasks[task_id]["status"] = "done"
             _tasks[task_id]["progress"] = 100.0
+
+        # 检查输出文件是否为 TS 流，若是则用 ffmpeg remux 成真正的 MP4
+        filepath = _tasks[task_id].get("filename")
+        if filepath and os.path.exists(filepath) and _is_ts_stream(filepath):
+            _tasks[task_id]["status"] = "remuxing"
+            fixed = _remux_ts_to_mp4(filepath)
+            _tasks[task_id]["filename"] = fixed
+        _tasks[task_id]["status"] = "done"
+        _tasks[task_id]["progress"] = 100.0
     except Exception as e:
         if _tasks[task_id].get("_cancelled"):
             _tasks[task_id]["status"] = "cancelled"
