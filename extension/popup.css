@@ -11,12 +11,28 @@ body {
 
 .container { padding: 12px; }
 
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
 header h1 {
   font-size: 15px;
   font-weight: 600;
   color: #4fc3f7;
-  margin-bottom: 10px;
 }
+
+.btn-tab {
+  background: none;
+  border: 1px solid #333;
+  color: #aaa;
+  border-radius: 5px;
+  padding: 3px 8px;
+  font-size: 14px;
+  cursor: pointer;
+}
+.btn-tab:hover { border-color: #4fc3f7; color: #4fc3f7; }
 
 .status-bar {
   padding: 8px 10px;
@@ -55,6 +71,7 @@ header h1 {
   margin: 0 auto 8px;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+@keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:0.4 } }
 
 .video-title {
   font-size: 12px;
@@ -87,89 +104,112 @@ header h1 {
 .format-audio .btn-download:hover { background: #81c784; }
 
 .badge-best {
-  font-size: 10px;
-  font-weight: 700;
-  color: #0a0a1a;
-  background: #ffd54f;
-  border-radius: 3px;
-  padding: 1px 5px;
+  font-size: 10px; font-weight: 700;
+  color: #0a0a1a; background: #ffd54f;
+  border-radius: 3px; padding: 1px 5px;
 }
 .badge-audio {
-  font-size: 10px;
-  font-weight: 700;
-  color: #0a1a0a;
-  background: #66bb6a;
-  border-radius: 3px;
-  padding: 1px 5px;
+  font-size: 10px; font-weight: 700;
+  color: #0a1a0a; background: #66bb6a;
+  border-radius: 3px; padding: 1px 5px;
 }
 
 .btn-download {
-  background: #4fc3f7;
-  color: #0a0a1a;
-  border: none;
-  border-radius: 5px;
-  padding: 5px 12px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
+  background: #4fc3f7; color: #0a0a1a;
+  border: none; border-radius: 5px;
+  padding: 5px 12px; font-size: 12px; font-weight: 600;
+  cursor: pointer; white-space: nowrap;
   transition: background 0.15s;
 }
 .btn-download:hover { background: #81d4fa; }
 .btn-download:disabled { background: #555; color: #888; cursor: default; }
 
 .progress-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 2px;
+  display: flex; align-items: center;
+  justify-content: space-between; margin-bottom: 2px;
 }
 .progress-header #progress-text { margin: 0; }
 
 .btn-cancel {
-  background: none;
-  border: 1px solid #555;
-  color: #aaa;
-  border-radius: 50%;
-  width: 22px;
-  height: 22px;
-  font-size: 12px;
-  line-height: 1;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
+  background: none; border: 1px solid #555; color: #aaa;
+  border-radius: 50%; width: 22px; height: 22px;
+  font-size: 12px; line-height: 1; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; padding: 0;
   transition: border-color 0.15s, color 0.15s;
 }
 .btn-cancel:hover { border-color: #ff6b6b; color: #ff6b6b; }
 
 .progress-bar {
-  background: #333;
-  border-radius: 4px;
-  height: 8px;
-  margin: 8px 0 4px;
-  overflow: hidden;
+  background: #333; border-radius: 4px;
+  height: 8px; margin: 8px 0 4px; overflow: hidden;
 }
 .progress-fill {
-  height: 100%;
-  background: #4fc3f7;
-  transition: width 0.3s ease;
+  height: 100%; background: #4fc3f7; transition: width 0.3s ease;
 }
 #progress-percent { color: #aaa; font-size: 12px; }
 
 .success-msg { color: #90ee90; font-size: 15px; margin-bottom: 6px; }
 .saved-path { color: #aaa; font-size: 11px; word-break: break-all; margin-bottom: 10px; }
 
+.done-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+.btn-fix {
+  background: #f57c00; color: #fff;
+  border: none; border-radius: 5px;
+  padding: 5px 12px; font-size: 12px; font-weight: 600;
+  cursor: pointer; transition: background 0.15s;
+}
+.btn-fix:hover { background: #ff9800; }
+
 .btn-secondary {
-  background: #16213e;
-  color: #4fc3f7;
-  border: 1px solid #4fc3f7;
-  border-radius: 5px;
-  padding: 5px 14px;
-  font-size: 12px;
-  cursor: pointer;
+  background: #16213e; color: #4fc3f7;
+  border: 1px solid #4fc3f7; border-radius: 5px;
+  padding: 5px 14px; font-size: 12px; cursor: pointer;
 }
 .btn-secondary:hover { background: #0f3460; }
+
+/* 修复面板 */
+.panel-title { font-weight: 600; color: #4fc3f7; margin-bottom: 10px; }
+
+.repair-scan-row {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
+}
+.scan-hint { font-size: 11px; color: #888; }
+
+.broken-list {
+  display: flex; flex-direction: column; gap: 4px;
+  max-height: 160px; overflow-y: auto; margin-bottom: 10px;
+}
+.broken-item {
+  display: flex; align-items: center; justify-content: space-between;
+  background: #1e1e0e; border: 1px solid #4a3000;
+  border-radius: 5px; padding: 6px 10px; gap: 8px;
+}
+.broken-item-name {
+  font-size: 11px; color: #ffcc80; flex: 1;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.broken-item-size { font-size: 10px; color: #888; white-space: nowrap; }
+.btn-fix-small {
+  background: #f57c00; color: #fff; border: none;
+  border-radius: 4px; padding: 3px 10px; font-size: 11px;
+  font-weight: 600; cursor: pointer; white-space: nowrap;
+}
+.btn-fix-small:hover { background: #ff9800; }
+
+.repair-manual { margin-top: 8px; border-top: 1px solid #222; padding-top: 10px; }
+.repair-manual-label { font-size: 11px; color: #888; margin-bottom: 6px; }
+.repair-input-row { display: flex; gap: 6px; }
+.repair-input {
+  flex: 1; background: #0f1b2e; border: 1px solid #334; color: #e0e0e0;
+  border-radius: 4px; padding: 5px 8px; font-size: 11px;
+}
+.repair-input:focus { outline: none; border-color: #4fc3f7; }
+
+/* 修复进度 */
+.progress-text-fix { color: #ffcc80; margin-bottom: 4px; font-size: 13px; }
+.fix-result { margin-top: 8px; font-size: 12px; padding: 6px 10px; border-radius: 5px; }
+.fix-result.success { background: #0e2e0e; color: #90ee90; }
+.fix-result.error   { background: #2e0e0e; color: #ff6b6b; }
 
 .hidden { display: none !important; }

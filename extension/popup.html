@@ -10,6 +10,7 @@
   <div class="container">
     <header>
       <h1>Video Downloader</h1>
+      <button id="btn-repair-tab" class="btn-tab" title="修复本地文件">🔧</button>
     </header>
 
     <div id="status-bar" class="status-bar hidden"></div>
@@ -43,7 +44,37 @@
     <div id="download-done" class="hidden">
       <p class="success-msg">✓ 下载完成</p>
       <p id="saved-path" class="saved-path"></p>
-      <button id="btn-back" class="btn-secondary">返回</button>
+      <div class="done-actions">
+        <button id="btn-fix-downloaded" class="btn-fix hidden">🔧 修复此文件</button>
+        <button id="btn-back" class="btn-secondary">返回</button>
+      </div>
+    </div>
+
+    <!-- 修复面板 -->
+    <div id="repair-panel" class="hidden">
+      <p class="panel-title">修复损坏的视频文件</p>
+      <div class="repair-scan-row">
+        <button id="btn-scan" class="btn-secondary">扫描 ~/Downloads</button>
+        <span id="scan-hint" class="scan-hint">找出格式损坏的 MP4</span>
+      </div>
+      <div id="broken-list" class="broken-list hidden"></div>
+      <div class="repair-manual">
+        <p class="repair-manual-label">或手动输入文件路径：</p>
+        <div class="repair-input-row">
+          <input id="repair-path-input" type="text" class="repair-input" placeholder="/Users/jie/Downloads/video.mp4">
+          <button id="btn-fix-manual" class="btn-fix-small">修复</button>
+        </div>
+      </div>
+      <button id="btn-repair-back" class="btn-secondary" style="margin-top:10px">← 返回</button>
+    </div>
+
+    <!-- 修复进度 -->
+    <div id="fix-progress" class="hidden">
+      <p class="progress-text-fix">🔧 正在修复...</p>
+      <div class="progress-bar">
+        <div id="fix-progress-fill" class="progress-fill" style="width: 50%; animation: pulse 1s infinite;"></div>
+      </div>
+      <p id="fix-result" class="fix-result hidden"></p>
     </div>
   </div>
   <script src="popup.js"></script>

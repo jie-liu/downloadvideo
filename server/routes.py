@@ -47,6 +47,49 @@ def cancel():
     return jsonify({"ok": ok})
 
 
+@bp.post("/fix")
+def fix_file():
+    data = request.get_json(silent=True) or {}
+    path = data.get("path", "").strip()
+    if not path:
+        return jsonify({"ok": False, "error": "path is required"}), 400
+    import os
+    path = os.path.expanduser(path)
+    from downloader import _is_ts_stream, _remux_ts_to_mp4
+    if not os.path.exists(path):
+        return jsonify({"ok": False, "error": "文件不存在"}), 404
+    if not _is_ts_stream(path):
+        return jsonify({"ok": False, "error": "该文件不是损坏的 TS 流，无需修复"}), 400
+    result = _remux_ts_to_mp4(path)
+    if result == path and _is_ts_stream(path):
+        return jsonify({"ok": False, "error": "修复失败（ffmpeg 不可用或转换出错）"})
+    return jsonify({"ok": True, "path": result})
+
+
+@bp.get("/scan")
+def scan_broken():
+    import os
+    from downloader import _is_ts_stream, _human_size
+    downloads = os.path.expanduser("~/Downloads")
+    broken = []
+    try:
+        for fname in os.listdir(downloads):
+            if not fname.lower().endswith(".mp4"):
+                continue
+            fpath = os.path.join(downloads, fname)
+            if os.path.isfile(fpath) and _is_ts_stream(fpath):
+                size = os.path.getsize(fpath)
+                broken.append({
+                    "name": fname,
+                    "path": fpath,
+                    "size": _human_size(size),
+                })
+    except Exception as e:
+        return jsonify({"files": [], "error": str(e)})
+    broken.sort(key=lambda x: x["name"])
+    return jsonify({"files": broken})
+
+
 @bp.get("/status")
 def status():
     task_id = request.args.get("task_id", "")

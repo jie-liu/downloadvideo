@@ -526,5 +526,8 @@ def get_task_status(task_id: str) -> dict:
     task = _tasks.get(task_id)
     if task is None:
         return {"status": "not_found"}
-    # 过滤内部字段，不暴露给客户端
-    return {k: v for k, v in task.items() if not k.startswith("_")}
+    result = {k: v for k, v in task.items() if not k.startswith("_")}
+    # 若下载完成，检查文件是否仍为 TS 流（remux 未成功时提示前端显示修复按钮）
+    if result.get("status") == "done" and result.get("filename"):
+        result["is_ts"] = _is_ts_stream(result["filename"])
+    return result
