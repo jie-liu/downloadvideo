@@ -373,26 +373,32 @@ def _find_ffmpeg() -> str:
 
 
 def _remux_ts_to_mp4(src: str) -> str:
-    """用 ffmpeg 把 TS 流 remux 成标准 MP4，成功返回新路径，失败返回原路径。"""
-    import subprocess
+    """用 ffmpeg 把 TS 流 remux 成标准 MP4，成功返回新路径（保持原文件名），失败返回原路径。"""
+    import subprocess, tempfile
     ffmpeg = _find_ffmpeg()
     if not ffmpeg:
         return src  # ffmpeg 不可用，保留原文件
     base, _ = os.path.splitext(src)
-    dst = base + ".mp4"
-    if dst == src:
-        dst = base + "_remuxed.mp4"
+    # 先写到临时文件，成功后再替换原文件
+    tmp = base + "._tmp_remux.mp4"
     try:
         result = subprocess.run(
-            [ffmpeg, "-y", "-i", src, "-c", "copy", "-movflags", "+faststart", dst],
+            [ffmpeg, "-y", "-i", src, "-c", "copy", "-movflags", "+faststart", tmp],
             capture_output=True,
             timeout=600,
         )
-        if result.returncode == 0 and os.path.exists(dst):
-            os.remove(src)   # 删掉原始 TS 文件
-            return dst
+        if result.returncode == 0 and os.path.exists(tmp):
+            os.remove(src)       # 删掉原始 TS 文件
+            os.rename(tmp, src)  # 用标准 MP4 替换，保持文件名
+            return src
     except subprocess.TimeoutExpired:
         pass
+    finally:
+        if os.path.exists(tmp):
+            try:
+                os.remove(tmp)
+            except Exception:
+                pass
     return src  # 失败，返回原文件
 
 
