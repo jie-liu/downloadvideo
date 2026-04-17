@@ -297,6 +297,10 @@ def _parse_ytdlp_formats(info: dict) -> list:
         )
         has_audio = f.get("acodec") and f.get("acodec") != "none"
 
+        # 跳过缩略图/storyboard 格式（mhtml 或无音视频）
+        if f.get("ext") == "mhtml" or (not has_video and not has_audio):
+            continue
+
         if not has_video and has_audio:
             abr = f.get("abr")
             audio_formats.append({
