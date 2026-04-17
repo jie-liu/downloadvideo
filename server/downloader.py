@@ -255,42 +255,57 @@ def _get_generic_page_info(url: str, html: str = None, video_urls: list = None) 
     return {"title": title, "formats": formats}
 
 
-def _human_size(size_bytes) -> str:
+def _human_size(size_bytes, approx=False) -> str:
     if size_bytes is None:
-        return "Unknown"
+        return "未知大小"
+    prefix = "≈ " if approx else ""
     if size_bytes >= 1_073_741_824:
-        return f"{size_bytes / 1_073_741_824:.1f} GB"
+        return f"{prefix}{size_bytes / 1_073_741_824:.1f} GB"
     if size_bytes >= 1_048_576:
-        return f"{size_bytes / 1_048_576:.1f} MB"
+        return f"{prefix}{size_bytes / 1_048_576:.1f} MB"
     if size_bytes >= 1024:
-        return f"{size_bytes / 1024:.1f} KB"
-    return f"{size_bytes} B"
+        return f"{prefix}{size_bytes / 1024:.1f} KB"
+    return f"{prefix}{size_bytes} B"
+
+
+def _estimate_size(f: dict, duration: float) -> tuple:
+    """根据码率和时长估算文件大小，返回 (bytes, is_approx)。"""
+    filesize = f.get("filesize")
+    if filesize:
+        return filesize, False
+    filesize_approx = f.get("filesize_approx")
+    if filesize_approx:
+        return filesize_approx, True
+    # 用总码率 × 时长估算
+    tbr = f.get("tbr")  # 单位 kbps
+    if tbr and duration:
+        estimated = int(tbr * 1000 / 8 * duration)
+        return estimated, True
+    return None, False
 
 
 def _parse_ytdlp_formats(info: dict) -> list:
     """将 yt-dlp info dict 转换为统一 format 列表，视频按大小降序，音频追加末尾。"""
     video_formats = []
     audio_formats = []
+    duration = info.get("duration") or 0
 
     for f in info.get("formats", []):
-        filesize = f.get("filesize")
-        filesize_approx = f.get("filesize_approx")
-        effective_size = filesize or filesize_approx
+        size_bytes, is_approx = _estimate_size(f, duration)
         has_video = f.get("width") or f.get("height") or (
             f.get("vcodec") and f.get("vcodec") != "none"
         )
         has_audio = f.get("acodec") and f.get("acodec") != "none"
 
         if not has_video and has_audio:
-            # 纯音频格式
             abr = f.get("abr")
             audio_formats.append({
                 "format_id": f.get("format_id"),
                 "resolution": f"Audio {int(abr)}kbps" if abr else "Audio only",
                 "ext": f.get("ext"),
-                "filesize": filesize,
-                "filesize_approx": filesize_approx,
-                "display_size": _human_size(effective_size),
+                "filesize": size_bytes,
+                "filesize_approx": size_bytes if is_approx else None,
+                "display_size": _human_size(size_bytes, approx=is_approx),
                 "is_audio": True,
             })
         elif has_video:
@@ -301,14 +316,14 @@ def _parse_ytdlp_formats(info: dict) -> list:
                 "format_id": f.get("format_id"),
                 "resolution": resolution,
                 "ext": f.get("ext"),
-                "filesize": filesize,
-                "filesize_approx": filesize_approx,
-                "display_size": _human_size(effective_size),
+                "filesize": size_bytes,
+                "filesize_approx": size_bytes if is_approx else None,
+                "display_size": _human_size(size_bytes, approx=is_approx),
             })
 
     # 视频按大小降序，音频按码率降序
-    video_formats.sort(key=lambda x: (x["filesize"] or x["filesize_approx"] or -1), reverse=True)
-    audio_formats.sort(key=lambda x: (x["filesize"] or x["filesize_approx"] or -1), reverse=True)
+    video_formats.sort(key=lambda x: (x["filesize"] or -1), reverse=True)
+    audio_formats.sort(key=lambda x: (x["filesize"] or -1), reverse=True)
     return video_formats + audio_formats
 
 

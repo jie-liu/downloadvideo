@@ -179,10 +179,13 @@ function renderFormats(title, formats) {
     const badge = idx === 0 && !fmt.is_audio
       ? '<span class="badge-best">最高画质</span>'
       : (fmt.is_audio ? '<span class="badge-audio">仅音频</span>' : "");
+    const sizeHtml = fmt.display_size && fmt.display_size !== "未知大小"
+      ? `<span class="format-size">${fmt.display_size}</span>`
+      : `<span class="format-size unknown">未知大小</span>`;
     item.innerHTML = `
       <div class="format-meta">
         <div class="format-resolution">${fmt.resolution}${badge}</div>
-        <div class="format-detail">${(fmt.ext || "").toUpperCase()} · ${fmt.display_size}</div>
+        <div class="format-detail">${(fmt.ext || "").toUpperCase()} · ${sizeHtml}</div>
       </div>
       <button class="btn-download">下载</button>
     `;
